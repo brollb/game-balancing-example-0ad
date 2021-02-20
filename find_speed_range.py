@@ -1,3 +1,12 @@
+"""
+This is a simple example exploring game balance using 0 A.D. In this example,
+we explore the range of valid attack ranges for cavalry such that they still
+  - defeat slingers of equal economic value
+  - lose to spearmen of equal economic value
+
+These conditions are evaluate when the cavalry are using the default ("deathball")
+behavior as well as a more sophisticated scripted policy (kiting).
+"""
 import zero_ad
 import math
 from functools import partial
