@@ -18,14 +18,8 @@ scenario_config_path = path.join(scriptdir, 'scenarios', 'CavalryVsSlingers.json
 with open(scenario_config_path, 'r') as f:
     cav_vs_slingers_scenario = f.read()
 
-with open(path.join(scriptdir, 'templates','cav_speed.js'), 'r') as f:
-    cav_speed_template = Template(f.read())
-
 with open(path.join(scriptdir, 'templates','modifier.js'), 'r') as f:
     modifier = Template(f.read())
-
-def set_cavalry_speed(game, scale_factor):
-    game.evaluate(cav_speed_template.substitute(speed_multiplier=scale_factor))
 
 def set_cavalry_repeat_time(game, scale_factor):
     code = modifier.substitute(parameter='Attack/Ranged/RepeatTime', multiplier=scale_factor)
