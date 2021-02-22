@@ -4,8 +4,10 @@ we explore the range of valid attack ranges for cavalry such that they still
   - defeat slingers of equal economic value
   - lose to spearmen of equal economic value
 
-These conditions are evaluate when the cavalry are using the default ("deathball")
+These conditions are evaluated when the cavalry are using the default ("deathball")
 behavior as well as a more sophisticated scripted policy (kiting).
+
+This code example is a single file with comments inline (inspired by learnxinyminutes :)).
 """
 import zero_ad
 import math
@@ -16,8 +18,14 @@ import json
 import numpy as np
 import time
 
+# First, we will establish a connection to our running game engine.
+# This is assuming you have already started 0 A.D. with the --rl-interface
+# flag (using the default port)
 game = zero_ad.ZeroAD('http://127.0.0.1:6000')
 
+# Before we get into the main logic, we will load some necessary files namely
+# the scenario configurations and a template we will use for modifying the cavalry
+# attack cooldown/prepare time
 scriptdir = path.dirname(path.realpath(__file__))
 scenario_config_path = path.join(scriptdir, 'scenarios', 'CavalryVsSpearmen.json')
 with open(scenario_config_path, 'r') as f:
@@ -30,6 +38,7 @@ with open(scenario_config_path, 'r') as f:
 with open(path.join(scriptdir, 'templates','modifier.js'), 'r') as f:
     modifier = Template(f.read())
 
+# Next, we will define some helper functions we will use for applying the game modifiers
 def set_cavalry_repeat_time(game, scale_factor):
     code = modifier.substitute(parameter='Attack/Ranged/RepeatTime', multiplier=scale_factor)
     game.evaluate(code)
@@ -42,6 +51,8 @@ def set_cavalry_attack_speed(game, scale_factor):
     set_cavalry_prepare_time(game, scale_factor)
     set_cavalry_repeat_time(game, scale_factor)
 
+# The run_scenario function is used for running a scenario and returning the winner;
+# get_winner is a simple helper method here to extract the winner from the game state
 def get_winner(state):
     return next(( i for (i, data) in enumerate(state.data['players']) if data['state'] == 'won' ))
     
@@ -56,24 +67,9 @@ def run_scenario(config, modifier, value):
 
     return get_winner(state)
 
-def run_kiting_scenario(config, modifier, value):
-    max_steps = 2000
-    step_count = 0
-    state = game.reset(config)
-    modifier(game, value)
-    chat = zero_ad.actions.chat(f'Testing with repeat time scaled by {value}')
-    game.step([chat])
-
-    while state.data['players'][1]['state'] == 'active':
-        state = game.step([kite(state)])
-        state = [game.step() for _ in range(4)].pop()
-        step_count += 5
-        if step_count > max_steps:
-            print('Stopping scenario: Exceeded episode duration limit.')
-            return 2
-
-    return get_winner(state)
-
+# Now we will define some helper methods for our kiting policy and the method we will
+# use when evaluating the scenario with a custom policy (rather than relying on the
+# default behavior!)
 def center(units):
     positions = np.array([unit.position() for unit in units])
     return np.mean(positions, axis=0)
@@ -135,6 +131,26 @@ def kite(state):
         is_retreating = False
         return attack(state)
 
+def run_kiting_scenario(config, modifier, value):
+    max_steps = 2000
+    step_count = 0
+    state = game.reset(config)
+    modifier(game, value)
+    chat = zero_ad.actions.chat(f'Testing with repeat time scaled by {value}')
+    game.step([chat])
+
+    while state.data['players'][1]['state'] == 'active':
+        state = game.step([kite(state)])
+        state = [game.step() for _ in range(4)].pop()
+        step_count += 5
+        if step_count > max_steps:
+            print('Stopping scenario: Exceeded episode duration limit.')
+            return 2
+
+    return get_winner(state)
+
+# We will now define one last function: the function used to search for the boundary where
+# the winner of the scenario changes from the agent to the enemy
 def find_boundary(test_fn, precision=0.1):
     lower = 0.0001
     upper = 1.
@@ -158,6 +174,7 @@ def find_boundary(test_fn, precision=0.1):
 
     return (upper + lower)/2, winner
 
+# Finally, we will search for some boundaries using the above helper functions!
 print('----- Deathball -----')
 boundary, lower_winner = find_boundary(partial(run_scenario, cav_vs_spearmen_scenario, set_cavalry_attack_speed))
 winner = 'player' if lower_winner == 1 else 'opponent'
